@@ -4,6 +4,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -14,13 +15,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { ort, interessen, entfernung, apiKey } = req.body;
-
-  if (!ort || !interessen || !entfernung || !apiKey) {
-    return res.status(400).json({ error: 'Missing required parameters' });
-  }
-
   try {
+    const { ort, interessen, entfernung, apiKey } = req.body;
+
+    if (!ort || !interessen || !entfernung || !apiKey) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters',
+        received: { ort: !!ort, interessen: !!interessen, entfernung: !!entfernung, apiKey: !!apiKey }
+      });
+    }
     // 1. Geocoding: Ort in Koordinaten umwandeln
     const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(ort)}&key=${apiKey}`;
     const geocodeResponse = await fetch(geocodeUrl);
