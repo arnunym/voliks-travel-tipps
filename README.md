@@ -1,1 +1,0 @@
-# voliks-travel-tipps
