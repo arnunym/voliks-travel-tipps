@@ -1,8 +1,0 @@
-{
-  "name": "volkis-travel-tipps",
-  "version": "1.0.0",
-  "description": "Travel tips app for camper adventures",
-  "scripts": {
-    "build": "echo 'Static site - no build needed'"
-  }
-}
