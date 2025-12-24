@@ -13,11 +13,11 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const openaiApiKey = process.env.OPENAI_API_KEY;
     
-    if (!geminiApiKey) {
+    if (!openaiApiKey) {
       return res.status(500).json({ 
-        error: 'Server configuration error: Gemini API key not found' 
+        error: 'Server configuration error: OpenAI API key not found' 
       });
     }
 
@@ -38,48 +38,57 @@ module.exports = async (req, res) => {
       else if (types.includes('tourist_attraction')) category = 'Sehenswürdigkeit';
     }
 
-    // Call Gemini API - using gemini-2.5-flash (stable, available model)
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
+    // Call OpenAI API
+    const openaiUrl = 'https://api.openai.com/v1/chat/completions';
     
     const prompt = `Beschreibe in maximal 2 kurzen Sätzen, warum "${name}" in ${location} interessant oder besuchenswert ist. Sei konkret und informativ. Schreibe auf Deutsch.`;
 
-    const geminiResponse = await fetch(geminiUrl, {
+    const openaiResponse = await fetch(openaiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }]
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'Du bist ein hilfreicher Reiseassistent, der kurze, prägnante Beschreibungen von Orten erstellt.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 150,
+        temperature: 0.7
       })
     });
 
-    const geminiData = await geminiResponse.json();
+    const openaiData = await openaiResponse.json();
     
-    console.log('Gemini API Status:', geminiResponse.status);
-    console.log('Gemini API Response:', JSON.stringify(geminiData, null, 2));
+    console.log('OpenAI API Status:', openaiResponse.status);
+    console.log('OpenAI API Response:', JSON.stringify(openaiData, null, 2));
 
-    if (geminiData.candidates && geminiData.candidates[0]?.content?.parts?.[0]?.text) {
-      const description = geminiData.candidates[0].content.parts[0].text.trim();
+    if (openaiData.choices && openaiData.choices[0]?.message?.content) {
+      const description = openaiData.choices[0].message.content.trim();
       
       return res.status(200).json({
         success: true,
         description
       });
     } else {
-      console.error('Gemini failed:', geminiData);
+      console.error('OpenAI failed:', openaiData);
       return res.status(500).json({ 
         error: 'Failed to generate description',
-        details: geminiData,
-        status: geminiResponse.status
+        details: openaiData,
+        status: openaiResponse.status
       });
     }
 
   } catch (error) {
-    console.error('Gemini API Error:', error);
+    console.error('OpenAI API Error:', error);
     return res.status(500).json({ 
       error: 'Server error',
       details: error.message 
