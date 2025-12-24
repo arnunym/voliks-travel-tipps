@@ -58,6 +58,9 @@ module.exports = async (req, res) => {
     });
 
     const geminiData = await geminiResponse.json();
+    
+    console.log('Gemini API Status:', geminiResponse.status);
+    console.log('Gemini API Response:', JSON.stringify(geminiData, null, 2));
 
     if (geminiData.candidates && geminiData.candidates[0]?.content?.parts?.[0]?.text) {
       const description = geminiData.candidates[0].content.parts[0].text.trim();
@@ -67,9 +70,11 @@ module.exports = async (req, res) => {
         description
       });
     } else {
+      console.error('Gemini failed:', geminiData);
       return res.status(500).json({ 
         error: 'Failed to generate description',
-        details: geminiData
+        details: geminiData,
+        status: geminiResponse.status
       });
     }
 

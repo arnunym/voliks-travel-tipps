@@ -34,21 +34,18 @@
 
     // GridCard Component für Kachel-Ansicht
     function GridCard({ place, categoryInfo, googleMapsUrl, photoUrl, fetchDescription }) {
-      const [description, setDescription] = useState(place.editorial_summary?.overview || '');
-      const [loading, setLoading] = useState(!place.editorial_summary?.overview);
+      const [description, setDescription] = useState('');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        // Only fetch if we don't have editorial summary
-        if (!place.editorial_summary?.overview) {
-          const loadDescription = async () => {
-            const desc = await fetchDescription(place);
-            if (desc) {
-              setDescription(desc);
-            }
-            setLoading(false);
-          };
-          loadDescription();
-        }
+        const loadDescription = async () => {
+          const desc = await fetchDescription(place);
+          if (desc) {
+            setDescription(desc);
+          }
+          setLoading(false);
+        };
+        loadDescription();
       }, [place.place_id]);
 
       return (
@@ -95,7 +92,7 @@
 
           {/* Content */}
           <div className="p-4">
-            <h3 className="font-semibold text-neutral-900 mb-2 line-clamp-1">{place.name}</h3>
+            <h3 className="font-semibold text-neutral-900 mb-2">{place.name}</h3>
             
             {/* Beschreibung */}
             {loading ? (
@@ -107,9 +104,7 @@
               </div>
             ) : description ? (
               <p className="text-sm text-neutral-600 mb-3 line-clamp-2">{description}</p>
-            ) : (
-              <p className="text-sm text-neutral-500 mb-3 italic">Beschreibung lädt...</p>
-            )}
+            ) : null}
 
             <p className="text-xs text-neutral-500 mb-2 line-clamp-1">{place.vicinity}</p>
             
