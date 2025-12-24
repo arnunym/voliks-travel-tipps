@@ -132,7 +132,7 @@
       const [ort, setOrt] = useState('');
       const [zeitbudget, setZeitbudget] = useState('2h');
       const [interessen, setInteressen] = useState([]);
-      const [entfernung, setEntfernung] = useState('mittel');
+      const [entfernung, setEntfernung] = useState(8); // Changed to km number
       const [vorschlaege, setVorschlaege] = useState([]);
       const [loading, setLoading] = useState(false);
       const [history, setHistory] = useState([]);
@@ -141,6 +141,7 @@
       const [descriptions, setDescriptions] = useState({}); // Cache für Beschreibungen
       const [loadingDescriptions, setLoadingDescriptions] = useState(false);
       const [triggerSearch, setTriggerSearch] = useState(false);
+      const [gettingLocation, setGettingLocation] = useState(false);
 
       const interessenOptionen = [
         { id: 'tourist_attraction', label: 'Sehenswürdigkeiten', icon: '🏛️' },
@@ -175,6 +176,54 @@
         return null;
       };
 
+      // Get current location
+      const getCurrentLocation = async () => {
+        if (!navigator.geolocation) {
+          alert('Geolocation wird von deinem Browser nicht unterstützt');
+          return;
+        }
+
+        setGettingLocation(true);
+
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              
+              // Reverse geocoding with Google API
+              const googleApiKey = 'AIzaSyD8ix1f-k0fKs7ODA4i1g-9e8UMYv8H1XE';
+              const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${googleApiKey}`;
+              
+              const response = await fetch(geocodeUrl);
+              const data = await response.json();
+              
+              if (data.results && data.results[0]) {
+                // Find city name from address components
+                const addressComponents = data.results[0].address_components;
+                const city = addressComponents.find(c => c.types.includes('locality'))?.long_name ||
+                            addressComponents.find(c => c.types.includes('administrative_area_level_3'))?.long_name ||
+                            addressComponents.find(c => c.types.includes('administrative_area_level_2'))?.long_name;
+                
+                if (city) {
+                  setOrt(city);
+                } else {
+                  setOrt(data.results[0].formatted_address);
+                }
+              }
+            } catch (error) {
+              console.error('Error reverse geocoding:', error);
+              alert('Fehler beim Ermitteln des Ortsnamens');
+            }
+            setGettingLocation(false);
+          },
+          (error) => {
+            console.error('Geolocation error:', error);
+            alert('Standort konnte nicht ermittelt werden. Bitte Berechtigung erteilen.');
+            setGettingLocation(false);
+          }
+        );
+      };
+
       const getPhotoUrl = (photoReference) => {
         if (!photoReference) return null;
         const googleApiKey = 'AIzaSyD8ix1f-k0fKs7ODA4i1g-9e8UMYv8H1XE'; // Dein Google API Key
@@ -182,13 +231,17 @@
       };
 
       const fetchDescription = async (place) => {
+        console.log('Fetching description for:', place.name);
+        
         // Check cache first
         if (descriptions[place.place_id]) {
+          console.log('Using cached description');
           return descriptions[place.place_id];
         }
 
         // Fallback to Google's editorial summary if available
         if (place.editorial_summary?.overview) {
+          console.log('Using editorial summary:', place.editorial_summary.overview);
           const desc = place.editorial_summary.overview;
           setDescriptions(prev => ({
             ...prev,
@@ -196,6 +249,8 @@
           }));
           return desc;
         }
+
+        console.log('Fetching from Gemini API...');
 
         try {
           // Timeout after 8 seconds
@@ -216,7 +271,10 @@
           });
 
           clearTimeout(timeoutId);
+          
+          console.log('API Response status:', response.status);
           const data = await response.json();
+          console.log('API Response data:', data);
           
           if (data.success && data.description) {
             setDescriptions(prev => ({
@@ -224,6 +282,8 @@
               [place.place_id]: data.description
             }));
             return data.description;
+          } else {
+            console.error('API returned error:', data.error);
           }
         } catch (error) {
           if (error.name === 'AbortError') {
@@ -233,6 +293,7 @@
           }
         }
         
+        console.log('No description available');
         return null;
       };
 
@@ -322,8 +383,7 @@
               ort,
               interessen: interessen, // Save IDs not labels
               interessenLabels: interessen.map(id => interessenOptionen.find(opt => opt.id === id)?.label).filter(Boolean),
-              entfernung,
-              zeitbudget,
+              entfernung, // Now a number (km)
               timestamp: new Date().toISOString(),
               resultsCount: data.results.length
             };
@@ -386,8 +446,7 @@
                       onClick={() => {
                         // Restore search parameters
                         setOrt(entry.ort);
-                        setZeitbudget(entry.zeitbudget);
-                        setEntfernung(entry.entfernung);
+                        setEntfernung(entry.entfernung || 8);
                         setInteressen(entry.interessen || []);
                         setShowHistory(false);
                         setTriggerSearch(true);
@@ -398,7 +457,7 @@
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-neutral-900 truncate">{entry.ort}</p>
                           <p className="text-xs text-neutral-600 mt-0.5">
-                            {(entry.interessenLabels || entry.interessen).join(', ')} · {entry.entfernung === 'nah' ? '~3km' : entry.entfernung === 'mittel' ? '~8km' : '~15km'}
+                            {(entry.interessenLabels || entry.interessen).join(', ')} · ~{entry.entfernung || 8}km
                           </p>
                         </div>
                         <span className="text-xs text-neutral-500 flex-shrink-0">
@@ -418,38 +477,26 @@
                 <label className="block text-sm font-medium text-neutral-900 mb-2">
                   Ort
                 </label>
-                <input
-                  type="text"
-                  value={ort}
-                  onChange={(e) => setOrt(e.target.value)}
-                  placeholder="z.B. Dresden"
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
-                />
-              </div>
-
-              {/* Zeitbudget */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-neutral-900 mb-2">
-                  Zeitbudget
-                </label>
-                <div className="inline-flex rounded-md border border-neutral-200">
-                  {['1h', '2h', '3-4h'].map((zeit, idx) => (
-                    <button
-                      key={zeit}
-                      onClick={() => setZeitbudget(zeit)}
-                      className={`px-4 py-2 text-sm font-medium ${
-                        idx === 0 ? 'rounded-l-md' : ''
-                      } ${idx === 2 ? 'rounded-r-md' : ''} ${
-                        idx !== 2 ? 'border-r border-neutral-200' : ''
-                      } ${
-                        zeitbudget === zeit
-                          ? 'bg-neutral-900 text-white'
-                          : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                      }`}
-                    >
-                      {zeit}
-                    </button>
-                  ))}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={ort}
+                    onChange={(e) => setOrt(e.target.value)}
+                    placeholder="z.B. Dresden"
+                    className="flex-1 px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
+                  />
+                  <button
+                    onClick={getCurrentLocation}
+                    disabled={gettingLocation}
+                    className="px-3 py-2 bg-neutral-900 text-white rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    title="Aktuellen Standort verwenden"
+                  >
+                    {gettingLocation ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <span>📍</span>
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -481,28 +528,34 @@
                 <label className="block text-sm font-medium text-neutral-900 mb-2">
                   Entfernung
                 </label>
-                <div className="inline-flex rounded-md border border-neutral-200">
-                  {[
-                    { key: 'nah', label: '~3km' },
-                    { key: 'mittel', label: '~8km' },
-                    { key: 'erweitert', label: '~15km' }
-                  ].map((option, idx) => (
-                    <button
-                      key={option.key}
-                      onClick={() => setEntfernung(option.key)}
-                      className={`px-4 py-2 text-sm font-medium ${
-                        idx === 0 ? 'rounded-l-md' : ''
-                      } ${idx === 2 ? 'rounded-r-md' : ''} ${
-                        idx !== 2 ? 'border-r border-neutral-200' : ''
-                      } ${
-                        entfernung === option.key
-                          ? 'bg-neutral-900 text-white'
-                          : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={entfernung}
+                    onChange={(e) => setEntfernung(Number(e.target.value))}
+                    className="flex-1 h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #171717 0%, #171717 ${((entfernung - 1) / 19) * 100}%, #e5e5e5 ${((entfernung - 1) / 19) * 100}%, #e5e5e5 100%)`
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={entfernung}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (val >= 1 && val <= 20) {
+                          setEntfernung(val);
+                        }
+                      }}
+                      className="w-16 px-2 py-1 text-center border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
+                    />
+                    <span className="text-sm text-neutral-600">km</span>
+                  </div>
                 </div>
               </div>
 
@@ -632,6 +685,11 @@
                 )}
               </div>
             )}
+
+            {/* Build Version */}
+            <div className="mt-8 text-center">
+              <span className="text-xs text-neutral-400">v1.0.0-beta</span>
+            </div>
           </div>
         </div>
       );

@@ -47,13 +47,8 @@ module.exports = async (req, res) => {
 
     const location = geocodeData.results[0].geometry.location;
     
-    // Entfernungswerte in Metern
-    const radiusMap = {
-      nah: 3000,
-      mittel: 8000,
-      erweitert: 15000
-    };
-    const radius = radiusMap[entfernung] || 8000;
+    // Entfernungswerte in Metern (convert km to meters)
+    const radius = typeof entfernung === 'number' ? entfernung * 1000 : 8000;
 
     // 2. Places Nearby Search für jede Interessenskategorie
     const allePlaces = [];
