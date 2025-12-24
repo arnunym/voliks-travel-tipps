@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
     }
 
     // Call Gemini API
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
     
     const prompt = `Beschreibe in maximal 2 kurzen Sätzen, warum "${name}" in ${location} interessant oder besuchenswert ist. Sei konkret und informativ. Schreibe auf Deutsch.`;
 
