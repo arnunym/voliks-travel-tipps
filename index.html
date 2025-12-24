@@ -39,6 +39,8 @@
       const [entfernung, setEntfernung] = useState('mittel');
       const [vorschlaege, setVorschlaege] = useState([]);
       const [loading, setLoading] = useState(false);
+      const [history, setHistory] = useState([]);
+      const [showHistory, setShowHistory] = useState(false);
 
       const interessenOptionen = [
         { id: 'tourist_attraction', label: 'Sehenswürdigkeiten', icon: '🏛️' },
@@ -46,6 +48,37 @@
         { id: 'restaurant', label: 'Restaurants', icon: '🍽️' },
         { id: 'cafe', label: 'Cafés', icon: '☕' }
       ];
+
+      const getCategoryInfo = (types) => {
+        if (!types || types.length === 0) return null;
+        
+        // Match place types to our categories
+        if (types.includes('tourist_attraction') || types.includes('point_of_interest')) {
+          return { icon: '🏛️', label: 'Sehenswürdigkeit' };
+        }
+        if (types.includes('park')) {
+          return { icon: '🌳', label: 'Natur' };
+        }
+        if (types.includes('restaurant')) {
+          return { icon: '🍽️', label: 'Restaurant' };
+        }
+        if (types.includes('cafe')) {
+          return { icon: '☕', label: 'Café' };
+        }
+        return null;
+      };
+
+      // Load history from localStorage on mount
+      React.useEffect(() => {
+        try {
+          const savedHistory = localStorage.getItem('volkis-search-history');
+          if (savedHistory) {
+            setHistory(JSON.parse(savedHistory));
+          }
+        } catch (error) {
+          console.error('Error loading history:', error);
+        }
+      }, []);
 
       const toggleInteresse = (id) => {
         setInteressen(prev => 
@@ -85,6 +118,21 @@
 
           if (data.success && data.results) {
             setVorschlaege(data.results);
+            
+            // Save to history
+            const historyEntry = {
+              id: Date.now(),
+              ort,
+              interessen: interessen.map(id => interessenOptionen.find(opt => opt.id === id)?.label).filter(Boolean),
+              entfernung,
+              zeitbudget,
+              timestamp: new Date().toISOString(),
+              resultsCount: data.results.length
+            };
+            
+            const updatedHistory = [historyEntry, ...history].slice(0, 10); // Keep last 10 searches
+            setHistory(updatedHistory);
+            localStorage.setItem('volkis-search-history', JSON.stringify(updatedHistory));
           } else {
             alert(data.error || 'Es gab einen Fehler bei der Suche.');
           }
@@ -100,12 +148,67 @@
         <div className="min-h-screen bg-neutral-50 p-4 md:p-8">
           <div className="max-w-2xl mx-auto">
             {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-semibold text-neutral-900 mb-2">
-                Volki's Travel Tipps
-              </h1>
-              <p className="text-neutral-600">Entdecke spannende Orte in deiner Nähe</p>
+            <div className="mb-8 flex justify-between items-start">
+              <div>
+                <h1 className="text-3xl font-semibold text-neutral-900 mb-2">
+                  Volki's Travel Tipps
+                </h1>
+                <p className="text-neutral-600">Entdecke spannende Orte in deiner Nähe</p>
+              </div>
+              {history.length > 0 && (
+                <button
+                  onClick={() => setShowHistory(!showHistory)}
+                  className="px-3 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors flex items-center gap-2"
+                >
+                  <span>📋</span>
+                  <span className="hidden sm:inline">History</span>
+                </button>
+              )}
             </div>
+
+            {/* History */}
+            {showHistory && history.length > 0 && (
+              <div className="bg-white border border-neutral-200 rounded-lg p-4 mb-6">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-medium text-neutral-900">Letzte Suchen</h3>
+                  <button
+                    onClick={() => {
+                      setHistory([]);
+                      localStorage.removeItem('volkis-search-history');
+                    }}
+                    className="text-xs text-neutral-500 hover:text-neutral-700"
+                  >
+                    Löschen
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {history.map((entry) => (
+                    <button
+                      key={entry.id}
+                      onClick={() => {
+                        setOrt(entry.ort);
+                        setZeitbudget(entry.zeitbudget);
+                        setEntfernung(entry.entfernung);
+                        setShowHistory(false);
+                      }}
+                      className="w-full text-left p-3 bg-neutral-50 hover:bg-neutral-100 rounded-md transition-colors"
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-neutral-900 truncate">{entry.ort}</p>
+                          <p className="text-xs text-neutral-600 mt-0.5">
+                            {entry.interessen.join(', ')} · {entry.entfernung === 'nah' ? '~3km' : entry.entfernung === 'mittel' ? '~8km' : '~15km'}
+                          </p>
+                        </div>
+                        <span className="text-xs text-neutral-500 flex-shrink-0">
+                          {new Date(entry.timestamp).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Suchformular */}
             <div className="bg-white border border-neutral-200 rounded-lg p-6 mb-6">
@@ -159,14 +262,14 @@
                     <button
                       key={option.id}
                       onClick={() => toggleInteresse(option.id)}
-                      className={`px-4 py-2 text-sm font-medium rounded-md border transition-colors ${
+                      className={`px-3 py-2.5 text-sm font-medium rounded-md border transition-colors flex items-center justify-center gap-2 ${
                         interessen.includes(option.id)
                           ? 'bg-neutral-900 text-white border-neutral-900'
                           : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
                       }`}
                     >
-                      <span className="mr-2">{option.icon}</span>
-                      {option.label}
+                      <span className="text-base flex-shrink-0">{option.icon}</span>
+                      <span className="text-xs sm:text-sm truncate">{option.label}</span>
                     </button>
                   ))}
                 </div>
@@ -228,28 +331,51 @@
                 <h2 className="text-lg font-semibold text-neutral-900 mb-3">
                   Vorschläge für {ort}
                 </h2>
-                {vorschlaege.map((place) => (
-                  <div
-                    key={place.place_id}
-                    className="bg-white border border-neutral-200 rounded-lg p-4 hover:border-neutral-300 transition-colors"
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className="font-medium text-neutral-900">{place.name}</h3>
-                      {place.rating && (
-                        <div className="flex items-center gap-1 text-sm">
-                          <span className="text-yellow-500">⭐</span>
-                          <span className="font-medium text-neutral-900">{place.rating}</span>
+                {vorschlaege.map((place) => {
+                  const categoryInfo = getCategoryInfo(place.types);
+                  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${place.place_id}`;
+                  
+                  return (
+                    <a
+                      key={place.place_id}
+                      href={googleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-white border border-neutral-200 rounded-lg p-4 hover:border-neutral-400 hover:shadow-sm transition-all cursor-pointer"
+                    >
+                      <div className="flex justify-between items-start gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {categoryInfo && (
+                              <span className="flex-shrink-0 px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded text-xs font-medium flex items-center gap-1">
+                                <span>{categoryInfo.icon}</span>
+                                <span>{categoryInfo.label}</span>
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-medium text-neutral-900 truncate">{place.name}</h3>
                         </div>
-                      )}
-                    </div>
-                    <p className="text-sm text-neutral-600 mb-2">{place.vicinity}</p>
-                    {place.opening_hours && (
-                      <p className="text-xs text-neutral-500">
-                        {place.opening_hours.open_now ? 'Geöffnet' : 'Geschlossen'}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                        {place.rating && (
+                          <div className="flex items-center gap-1 text-sm flex-shrink-0">
+                            <span className="text-yellow-500">⭐</span>
+                            <span className="font-medium text-neutral-900">{place.rating}</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm text-neutral-600 mb-2">{place.vicinity}</p>
+                      <div className="flex items-center justify-between">
+                        {place.opening_hours && (
+                          <span className={`text-xs font-medium ${place.opening_hours.open_now ? 'text-green-600' : 'text-neutral-500'}`}>
+                            {place.opening_hours.open_now ? '● Geöffnet' : '○ Geschlossen'}
+                          </span>
+                        )}
+                        <span className="text-xs text-neutral-500 ml-auto">
+                          Auf Google Maps öffnen →
+                        </span>
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             )}
           </div>
