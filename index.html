@@ -52,18 +52,25 @@
       const getCategoryInfo = (types) => {
         if (!types || types.length === 0) return null;
         
-        // Match place types to our categories
-        if (types.includes('tourist_attraction') || types.includes('point_of_interest')) {
-          return { icon: '🏛️', label: 'Sehenswürdigkeit' };
-        }
-        if (types.includes('park')) {
-          return { icon: '🌳', label: 'Natur' };
-        }
-        if (types.includes('restaurant')) {
+        // Match place types to our categories - check specific types FIRST
+        // Restaurant and Cafe are most specific
+        if (types.includes('restaurant') || types.includes('meal_takeaway') || types.includes('meal_delivery')) {
           return { icon: '🍽️', label: 'Restaurant' };
         }
-        if (types.includes('cafe')) {
+        if (types.includes('cafe') || types.includes('coffee_shop')) {
           return { icon: '☕', label: 'Café' };
+        }
+        // Parks are also specific
+        if (types.includes('park') || types.includes('campground') || types.includes('natural_feature')) {
+          return { icon: '🌳', label: 'Natur' };
+        }
+        // Tourist attractions are most generic - check LAST
+        if (types.includes('tourist_attraction')) {
+          return { icon: '🏛️', label: 'Sehenswürdigkeit' };
+        }
+        // Default fallback for point_of_interest
+        if (types.includes('point_of_interest')) {
+          return { icon: '📍', label: 'Sehenswert' };
         }
         return null;
       };
