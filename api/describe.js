@@ -38,8 +38,8 @@ module.exports = async (req, res) => {
       else if (types.includes('tourist_attraction')) category = 'Sehenswürdigkeit';
     }
 
-    // Call Gemini API
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+    // Call Gemini API - using gemini-pro which is stable and available
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`;
     
     const prompt = `Beschreibe in maximal 2 kurzen Sätzen, warum "${name}" in ${location} interessant oder besuchenswert ist. Sei konkret und informativ. Schreibe auf Deutsch.`;
 
