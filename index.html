@@ -34,19 +34,21 @@
 
     // GridCard Component für Kachel-Ansicht
     function GridCard({ place, categoryInfo, googleMapsUrl, photoUrl, fetchDescription }) {
-      const [description, setDescription] = useState('');
-      const [loading, setLoading] = useState(false);
+      const [description, setDescription] = useState(place.editorial_summary?.overview || '');
+      const [loading, setLoading] = useState(!place.editorial_summary?.overview);
 
       useEffect(() => {
-        const loadDescription = async () => {
-          setLoading(true);
-          const desc = await fetchDescription(place);
-          if (desc) {
-            setDescription(desc);
-          }
-          setLoading(false);
-        };
-        loadDescription();
+        // Only fetch if we don't have editorial summary
+        if (!place.editorial_summary?.overview) {
+          const loadDescription = async () => {
+            const desc = await fetchDescription(place);
+            if (desc) {
+              setDescription(desc);
+            }
+            setLoading(false);
+          };
+          loadDescription();
+        }
       }, [place.place_id]);
 
       return (
@@ -138,6 +140,7 @@
       const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
       const [descriptions, setDescriptions] = useState({}); // Cache für Beschreibungen
       const [loadingDescriptions, setLoadingDescriptions] = useState(false);
+      const [triggerSearch, setTriggerSearch] = useState(false);
 
       const interessenOptionen = [
         { id: 'tourist_attraction', label: 'Sehenswürdigkeiten', icon: '🏛️' },
@@ -184,7 +187,21 @@
           return descriptions[place.place_id];
         }
 
+        // Fallback to Google's editorial summary if available
+        if (place.editorial_summary?.overview) {
+          const desc = place.editorial_summary.overview;
+          setDescriptions(prev => ({
+            ...prev,
+            [place.place_id]: desc
+          }));
+          return desc;
+        }
+
         try {
+          // Timeout after 8 seconds
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
           const response = await fetch('/api/describe', {
             method: 'POST',
             headers: {
@@ -194,9 +211,11 @@
               name: place.name,
               location: ort,
               types: place.types
-            })
+            }),
+            signal: controller.signal
           });
 
+          clearTimeout(timeoutId);
           const data = await response.json();
           
           if (data.success && data.description) {
@@ -207,10 +226,28 @@
             return data.description;
           }
         } catch (error) {
-          console.error('Error fetching description:', error);
+          if (error.name === 'AbortError') {
+            console.log('Description request timed out for:', place.name);
+          } else {
+            console.error('Error fetching description:', error);
+          }
         }
         
         return null;
+      };
+
+      // Batch load all descriptions when switching to grid view
+      const loadAllDescriptions = async (places) => {
+        setLoadingDescriptions(true);
+        
+        // Load in parallel with limit
+        const batchSize = 3; // Load 3 at a time to avoid rate limits
+        for (let i = 0; i < places.length; i += batchSize) {
+          const batch = places.slice(i, i + batchSize);
+          await Promise.all(batch.map(place => fetchDescription(place)));
+        }
+        
+        setLoadingDescriptions(false);
       };
 
       // Load history from localStorage on mount
@@ -224,6 +261,21 @@
           console.error('Error loading history:', error);
         }
       }, []);
+
+      // Load descriptions when switching to grid view
+      React.useEffect(() => {
+        if (viewMode === 'grid' && vorschlaege.length > 0) {
+          loadAllDescriptions(vorschlaege);
+        }
+      }, [viewMode, vorschlaege]);
+
+      // Trigger search when history item is clicked
+      React.useEffect(() => {
+        if (triggerSearch) {
+          sucheVorschlaege();
+          setTriggerSearch(false);
+        }
+      }, [triggerSearch]);
 
       const toggleInteresse = (id) => {
         setInteressen(prev => 
@@ -268,7 +320,8 @@
             const historyEntry = {
               id: Date.now(),
               ort,
-              interessen: interessen.map(id => interessenOptionen.find(opt => opt.id === id)?.label).filter(Boolean),
+              interessen: interessen, // Save IDs not labels
+              interessenLabels: interessen.map(id => interessenOptionen.find(opt => opt.id === id)?.label).filter(Boolean),
               entfernung,
               zeitbudget,
               timestamp: new Date().toISOString(),
@@ -331,10 +384,13 @@
                     <button
                       key={entry.id}
                       onClick={() => {
+                        // Restore search parameters
                         setOrt(entry.ort);
                         setZeitbudget(entry.zeitbudget);
                         setEntfernung(entry.entfernung);
+                        setInteressen(entry.interessen || []);
                         setShowHistory(false);
+                        setTriggerSearch(true);
                       }}
                       className="w-full text-left p-3 bg-neutral-50 hover:bg-neutral-100 rounded-md transition-colors"
                     >
@@ -342,7 +398,7 @@
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-neutral-900 truncate">{entry.ort}</p>
                           <p className="text-xs text-neutral-600 mt-0.5">
-                            {entry.interessen.join(', ')} · {entry.entfernung === 'nah' ? '~3km' : entry.entfernung === 'mittel' ? '~8km' : '~15km'}
+                            {(entry.interessenLabels || entry.interessen).join(', ')} · {entry.entfernung === 'nah' ? '~3km' : entry.entfernung === 'mittel' ? '~8km' : '~15km'}
                           </p>
                         </div>
                         <span className="text-xs text-neutral-500 flex-shrink-0">
